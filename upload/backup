@@ -1,0 +1,118 @@
+#!/usr/bin/expect
+set tftp 192.168.68.35
+set host 192.168.68.
+set user dell
+set pass \$iforgot9
+set now [clock format [clock seconds] -format "%d.%m.%y.%H.%M." -timezone "Asia/Kolkata"] 
+proc dell {ip user pass config} {
+      global tftp
+      set timeout 2
+      spawn telnet $ip
+      expect "user:"
+      send "$user\n"
+      expect "Password:"
+      send "$pass\n"
+      expect ">"
+       puts "\n Connection Sucsseful"
+      puts  "\n Dell Switch $ip  backup runninning \n"
+      pbar
+      send "en\n"
+      expect "password:"
+      send "$pass\n"
+      send "write\n"
+      expect "boolean"
+      send "Y\n"
+      send "copy running-config tftp://$tftp/$config\n"
+      expect "boolean"
+      send "Y\n"
+      expect "$config"
+      send "\n"
+      expect "yes/no:"
+      send "eixt\n"
+     puts "\n\nSwitch $ip backup completed. Saved as filename $config\n\n"
+}
+
+proc margin {str} {
+ for { set j 0 } {$j <=15} {incr j 1} {
+  puts -nonewline " $str "
+}
+ }
+
+
+
+proc pbar {} {
+set total 10 
+proc progress {cur tot} {
+   # if you don't want to redraw all the time, uncomment and change ferquency
+   #if {$cur % ($tot/300)} { return }
+   # set to total width of progress bar
+   set total 74
+  
+   set half [expr {$total/2}]
+   set percent [expr {100.*$cur/$tot}]
+   set val (\ [format "%6.2f%%" $percent]\ )
+   set str "\r|[string repeat = [expr {round($percent*$total/100)}]][string repeat { } [expr {$total-round($percent*$total/100)}]]|"
+   set str "[string range $str 0 $half][string range $str [expr {$half+[string length $val]-1}] end] $val"
+   puts -nonewline stderr $str
+ }
+
+for {set i 0} {$i <= $total} {incr i 1} {
+	progress $i $total
+	after 300
+}
+}
+
+puts "\n"
+
+proc cisco {ip config} {
+      global tftp
+      set timeout 2
+      spawn ssh  $ip
+      puts  " \nConnection Sucessful"
+      expect ">"
+      send "write\n"
+      send "Y\n"
+      puts  "\nCisco Switch $ip  backup runninning\n "
+      pbar
+      send "copy running-config tftp://$tftp/$config\n\n"
+       expect "$tftp"
+      send "\n"
+      expect "$config"
+      send "\n"
+      send "exit\n"
+      puts "\n\nSwitch $ip backup completed. Saved as filename $config\n\n"
+}
+
+proc ping {ip} {
+ spawn ping -c 2 -i 3 -W 1 $ip
+expect  {
+        " 0%" {set flag 0;puts "\nSwitch Available in ip $ip"}
+        " 100%" {set flag 1;puts "\nNo switch in ip $ip"}
+      }
+ return $flag;
+}
+log_user 0
+puts "\n\n\n\n\n\n\n_________Welcome________ \nSwitch backup will start now\n\n"
+for { set j 0 } {$j <=15} {incr j 1} {
+  puts -nonewline " # "
+} 
+for {set i 6} {$i <=25} {incr i 1} {
+   set ip $host$i
+    margin #
+    puts  "\n\n\nChecking connection to $ip";
+    set config "$now$ip"
+   set mask [ping $ip]
+  if { $mask == 0 } {
+   puts "\nConnecting To Switch $ip"
+      if { $i <= 11 } {
+          dell $ip $user $pass $config
+       } else  {
+       cisco $ip $config 
+      }  
+   }  else {
+  puts "\nTrying Next hope\n\n";
+}
+margin #
+margin #
+  }
+puts "\n\n ___________Backup Completed______________\n\n"
